@@ -31,41 +31,32 @@ impl Discovery {
         let mdns = ServiceDaemon::new()?;
         let peers = Arc::new(Mutex::new(HashMap::new()));
         let (tx, rx) = mpsc::channel(100);
-        let hostname = hostname::get()
+        let service_name = hostname::get()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        let service_name = format!("{}._oneshare._tcp.local.", hostname);
-
-        Ok((
-            Self {
-                mdns,
-                peers,
-                tx,
-                service_name,
-            },
-            rx,
-        ))
-    }
-
-    pub fn start_discovery(&self) -> Result<(), DiscoveryError> {
-        // 注册本地服务
-        let port = 8000; // 使用固定端口或动态分配
-        let properties = [("version", "1.0"), ("type", "peer")];
+        let port = 8000; // 使用固定端口或从配置中获取
         let service_info = mdns_sd::ServiceInfo::new(
             "_oneshare._tcp.local.",
-            &self.service_name,
-            "localhost",
-            "",
+            &service_name,
+            &service_name,
+            "0.0.0.0",
             port,
-            &properties[..],
+            &[("version", "1.0")],
         )?;
-        self.mdns.register(service_info)?;
+        mdns.register(service_info)?;
+
+        let discovery = Self {
+            mdns,
+            peers: peers.clone(),
+            tx: tx.clone(),
+            service_name,
+        };
 
         // 浏览网络中的其他服务
-        let browse_receiver = self.mdns.browse("_oneshare._tcp.local.")?;
-        let peers = self.peers.clone();
-        let tx = self.tx.clone();
+        let browse_receiver = discovery.mdns.browse("_oneshare._tcp.local.")?;
+        let peers_clone = peers.clone();
+        let tx_clone = tx.clone();
 
         tokio::spawn(async move {
             while let Ok(event) = browse_receiver.recv_async().await {
@@ -78,19 +69,22 @@ impl Discovery {
                                 ip: *ip,
                                 port: info.get_port(),
                             };
-                            peers.lock().unwrap().insert(peer.id.clone(), peer.clone());
-                            let _ = tx.send(peer);
+                            peers_clone
+                                .lock()
+                                .unwrap()
+                                .insert(peer.id.clone(), peer.clone());
+                            let _ = tx_clone.send(peer).await;
                         }
                     }
                     ServiceEvent::ServiceRemoved(name, _type) => {
-                        peers.lock().unwrap().remove(&name);
+                        peers_clone.lock().unwrap().remove(&name);
                     }
                     _ => {}
                 }
             }
         });
 
-        Ok(())
+        Ok((discovery, rx))
     }
 
     pub fn get_peers(&self) -> Vec<PeerInfo> {

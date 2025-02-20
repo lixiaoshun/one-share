@@ -58,7 +58,7 @@ impl Discovery {
             "localhost",
             "",
             port,
-            &properties[..],
+            &properties,
         )?;
         self.mdns.register(service_info)?;
 

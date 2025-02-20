@@ -31,39 +31,31 @@ impl Discovery {
         let mdns = ServiceDaemon::new()?;
         let peers = Arc::new(Mutex::new(HashMap::new()));
         let (tx, rx) = mpsc::channel(100);
-        let hostname = hostname::get()
+        let service_name = hostname::get()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        let service_name = format!("{}._oneshare._tcp.local.", hostname);
+        let port = 8000; // 使用固定端口或从配置中获取
 
-        Ok((
-            Self {
-                mdns,
-                peers,
-                tx,
-                service_name,
-            },
-            rx,
-        ))
-    }
-
-    pub fn start_discovery(&self) -> Result<(), DiscoveryError> {
-        // 注册本地服务
-        let port = 8000; // 使用固定端口或动态分配
-        let properties = [("version", "1.0"), ("type", "peer")];
         let service_info = mdns_sd::ServiceInfo::new(
             "_oneshare._tcp.local.",
-            &self.service_name,
-            "localhost",
+            &service_name,
+            &service_name,
             "",
             port,
-            &properties[..],
+            &[("version", "1.0")],
         )?;
-        self.mdns.register(service_info)?;
+        mdns.register(service_info)?;
+
+        let discovery = Self {
+            mdns,
+            peers: peers.clone(),
+            tx: tx.clone(),
+            service_name,
+        };
 
         // 浏览网络中的其他服务
-        let browse_receiver = self.mdns.browse("_oneshare._tcp.local.")?;
+        let browse_receiver = discovery.mdns.browse("_oneshare._tcp.local.")?;
         let peers = self.peers.clone();
         let tx = self.tx.clone();
 

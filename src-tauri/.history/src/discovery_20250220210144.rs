@@ -2,8 +2,8 @@ use mdns_sd::{ServiceDaemon, ServiceEvent};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
-use thiserror::Error;
 use tokio::sync::mpsc;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DiscoveryError {
@@ -37,28 +37,19 @@ impl Discovery {
             .to_string();
         let service_name = format!("{}._oneshare._tcp.local.", hostname);
 
-        Ok((
-            Self {
-                mdns,
-                peers,
-                tx,
-                service_name,
-            },
-            rx,
-        ))
+        Ok((Self { mdns, peers, tx, service_name }, rx))
     }
 
     pub fn start_discovery(&self) -> Result<(), DiscoveryError> {
         // 注册本地服务
         let port = 8000; // 使用固定端口或动态分配
-        let properties = [("version", "1.0"), ("type", "peer")];
         let service_info = mdns_sd::ServiceInfo::new(
             "_oneshare._tcp.local.",
             &self.service_name,
             "localhost",
             "",
             port,
-            &properties[..],
+            &["version=1.0"]
         )?;
         self.mdns.register(service_info)?;
 

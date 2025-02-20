@@ -51,14 +51,13 @@ impl Discovery {
     pub fn start_discovery(&self) -> Result<(), DiscoveryError> {
         // 注册本地服务
         let port = 8000; // 使用固定端口或动态分配
-        let properties = [("version", "1.0"), ("type", "peer")];
         let service_info = mdns_sd::ServiceInfo::new(
             "_oneshare._tcp.local.",
             &self.service_name,
             "localhost",
             "",
             port,
-            &properties[..],
+            &["version=1.0"],
         )?;
         self.mdns.register(service_info)?;
 

@@ -14,6 +14,9 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [transferProgress, setTransferProgress] = useState(0);
+  const [discoveryStatus, setDiscoveryStatus] = useState<
+    "idle" | "discovering" | "error"
+  >("idle");
 
   useEffect(() => {
     // 启动设备发现服务
@@ -25,18 +28,24 @@ function App() {
 
   async function startDiscovery() {
     try {
+      setDiscoveryStatus("discovering");
       await invoke("start_discovery");
+      await updatePeers(); // 立即尝试获取设备列表
     } catch (error) {
       console.error("Failed to start discovery:", error);
+      setDiscoveryStatus("error");
     }
   }
 
   async function updatePeers() {
+    if (discoveryStatus !== "discovering") return;
+
     try {
       const peerList = await invoke<Peer[]>("get_peers");
       setPeers(peerList);
     } catch (error) {
       console.error("Failed to get peers:", error);
+      setDiscoveryStatus("error");
     }
   }
 
@@ -83,6 +92,12 @@ function App() {
       <main className="main-content">
         <section className="peers-section">
           <h2>在线设备</h2>
+          {discoveryStatus === "error" && (
+            <div className="error-message">设备发现服务出错，请重试</div>
+          )}
+          {discoveryStatus === "discovering" && peers.length === 0 && (
+            <div className="info-message">正在搜索局域网内的设备...</div>
+          )}
           <div className="peers-list">
             {peers.map((peer) => (
               <div key={peer.id} className="peer-item">
